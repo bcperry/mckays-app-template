@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 class FileBase(BaseModel):
@@ -16,5 +16,4 @@ class File(FileBase):
     transcription: str | None = None
     generated_text: str | None = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

@@ -2,12 +2,10 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import shutil
 import os
 import hashlib
-from uuid import uuid4
 from .db.crud import create_file, get_file, get_files, update_file_original_filename, get_file_by_hash
-from .db.database import SessionLocal, engine, get_db
+from .db.database import engine, get_db
 from .db.models.file_model import File as FileModel
 from .db.schemas import FileCreate, File as FileSchema
 from .routers import payments, ai_processing
