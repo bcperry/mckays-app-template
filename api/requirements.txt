@@ -4,4 +4,11 @@ pydantic
 uvicorn
 python-multipart
 
+# for payment processing
 stripe
+
+# for ai processing
+
+Pillow
+whisper
+transformers

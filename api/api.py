@@ -7,10 +7,10 @@ import os
 import hashlib
 from uuid import uuid4
 from .db.crud import create_file, get_file, get_files, update_file_original_filename, get_file_by_hash
-from .db.database import SessionLocal, engine
+from .db.database import SessionLocal, engine, get_db
 from .db.models.file_model import File as FileModel
 from .db.schemas import FileCreate, File as FileSchema
-from .routers import payments
+from .routers import payments, ai_processing
 # Create tables
 FileModel.__table__.create(bind=engine, checkfirst=True)
 
@@ -26,20 +26,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include the router with a tag
-app.include_router(payments.router, prefix="/api/payments", tags=["payments"])
+# Include the routers
+app.include_router(payments.router, prefix="/api/payments", tags=["Payments"])
+app.include_router(ai_processing.router, prefix="/api/ai", tags=["AI Processing"])
 
 # Create a directory to store uploaded files
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
 
         
 @app.get("/", include_in_schema=False)
@@ -47,7 +42,7 @@ async def root():
     return RedirectResponse(url="/docs")
 
 
-@app.post("/upload", response_model=FileSchema, tags=["files"])
+@app.post("/upload", response_model=FileSchema, tags=["Files"])
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
         # Generate file hash
@@ -83,16 +78,14 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/files", response_model=list[FileSchema], tags=["files"])
+@app.get("/files", response_model=list[FileSchema], tags=["Files"])
 def get_all_files(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     files = get_files(db, skip=skip, limit=limit)
     return files
 
-@app.get("/files/{file_id}", response_model=FileSchema, tags=["files"])
+@app.get("/files/{file_id}", response_model=FileSchema, tags=["Files"])
 def get_single_file(file_id: int, db: Session = Depends(get_db)):
     db_file = get_file(db, file_id=file_id)
     if db_file is None:
         raise HTTPException(status_code=404, detail="File not found")
     return db_file
-
-# TODO: Add transcription and text generation endpoints
