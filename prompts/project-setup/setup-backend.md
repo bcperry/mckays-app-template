@@ -2,7 +2,7 @@
 
 Use this guide to setup the backend for this project.
 
-It uses Supabase, Drizzle ORM, and Server Actions.
+It uses FastAPI, SQLAlchemy, Pydantic, and RESTful API design principles.
 
 Write the complete code for every step. Do not get lazy. Write everything that is needed.
 
@@ -12,262 +12,136 @@ Your goal is to completely finish the backend setup.
 
 If the user gets stuck, refer them to the following links:
 
-- [Supabase](https://supabase.com/)
-- [Drizzle Docs](https://orm.drizzle.team/docs/overview)
-- [Drizzle with Supabase Quickstart](https://orm.drizzle.team/learn/tutorials/drizzle-with-supabase)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [SQLAlchemy](https://www.sqlalchemy.org/)
+- [Pydantic](https://docs.pydantic.dev/latest/)
+- [RESTful API Design Principles](https://restfulapi.net/rest-architectural-constraints/)
 
-## Required Environment Variables
-
-Make sure the user knows to set the following environment variables:
-
-```bash
-DATABASE_URL=
-```
 
 ## Install Libraries
 
-Make sure the user knows to install the following libraries:
+Make sure the user knows to install the python packages:
 
 ```bash
-npm i drizzle-orm dotenv postgres
-npm i -D drizzle-kit
+pip install fastapi sqlalchemy pydantic
 ```
 
 ## Setup Steps
 
-- Create a `/db` folder in the root of the project
+- Create a `/api` folder in the root of the project
 
-- Create a `/types` folder in the root of the project
+- Create a `/api/db` folder in the root of the project
 
-- Add a `drizzle.config.ts` file to the root of the project with the following code:
+- Add a `api.py` file to the `/api` folder with the following code:
 
-```ts
-import { config } from "dotenv";
-import { defineConfig } from "drizzle-kit";
+```python
+from fastapi import FastAPI
 
-config({ path: ".env.local" });
+app = FastAPI()
 
-export default defineConfig({
-  schema: "./db/schema/index.ts",
-  out: "./db/migrations",
-  dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL!
-  }
-});
+@app.get("/")
+def read_root():
+    return {"message": "Hello World"}
 ```
 
-- Add a file called `db.ts` to the `/db` folder with the following code:
+- Add a file called `database.py` to the `/api/db` folder with the following code:
 
-```ts
-import { config } from "dotenv";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { exampleTable } from "./schema";
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 
-config({ path: ".env.local" });
+DATABASE_URL = "postgresql://user:password@localhost/dbname"
 
-const schema = {
-  exampleTable
-};
-
-const client = postgres(process.env.DATABASE_URL!);
-
-export const db = drizzle(client, { schema });
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 ```
 
-- Create 2 folders in the `/db` folder:
+- Create a new folder called `/models` in the `/api/db` folder
 
-- `/schema`
-  - Add a file called `index.ts` to the `/schema` folder
-- `/queries`
+- Create an example model in the `/models` folder called `example-model.py` with the following code:
 
-- Create an example table in the `/schema` folder called `example-schema.ts` with the following code:
+```python
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.ext.declarative import declarative_base
 
-```ts
-import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+Base = declarative_base()
 
-export const exampleTable = pgTable("example", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  age: integer("age").notNull(),
-  email: text("email").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date())
-});
+class Example(Base):
+    __tablename__ = "example"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    age = Column(Integer, nullable=False)
+    email = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False) 
 
-export type InsertExample = typeof exampleTable.$inferInsert;
-export type SelectExample = typeof exampleTable.$inferSelect;
+    def __repr__(self):
+        return f"<Example(name='{self.name}', age='{self.age}', email='{self.email}')>"
 ```
 
-- Export the example table in the `/schema/index.ts` file like so:
+- Create a new folder called `/schemas` in the `/api/db` folder
 
-```ts
-export * from "./example-schema";
+- Create an example schema in the `/schemas` folder called `example-schema.py` with the following code: 
+
+```python
+from pydantic import BaseModel
+
+class ExampleSchema(BaseModel):
+    name: str
+    age: int
+    email: str
+
 ```
 
-- Create a new file called `example-queries.ts` in the `/queries` folder with the following code:
+- Create a new folder called `/crud` in the `/api/db` folder
 
-```ts
-"use server";
+- Create an example crud in the `/crud` folder called `example-crud.py` with the following code:
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db/db";
-import { InsertExample, SelectExample } from "../schema/example-schema";
-import { exampleTable } from "./../schema/example-schema";
+```python
+from sqlalchemy.orm import Session
+from . import models, schemas
 
-export const createExample = async (data: InsertExample) => {
-  try {
-    const [newExample] = await db.insert(exampleTable).values(data).returning();
-    return newExample;
-  } catch (error) {
-    console.error("Error creating example:", error);
-    throw new Error("Failed to create example");
-  }
-};
+def get_all_examples(db: Session):
+    return db.query(models.Example).all()
 
-export const getExampleById = async (id: string) => {
-  try {
-    const example = await db.query.exampleTable.findFirst({
-      where: eq(exampleTable.id, id)
-    });
-    if (!example) {
-      throw new Error("Example not found");
-    }
-    return example;
-  } catch (error) {
-    console.error("Error getting example by ID:", error);
-    throw new Error("Failed to get example");
-  }
-};
+def get_example_by_id(db: Session, example_id: int):
+    return db.query(models.Example).filter(models.Example.id == example_id).first()
 
-export const getAllExamples = async (): Promise<SelectExample[]> => {
-  return db.query.exampleTable.findMany();
-};
+def create_example(db: Session, example: schemas.ExampleSchema):
+    db_example = models.Example(name=example.name, age=example.age, email=example.email)
+    db.add(db_example)
+    db.commit()
+    db.refresh(db_example)
+    return db_example
 
-export const updateExample = async (id: string, data: Partial<InsertExample>) => {
-  try {
-    const [updatedExample] = await db.update(exampleTable).set(data).where(eq(exampleTable.id, id)).returning();
-    return updatedExample;
-  } catch (error) {
-    console.error("Error updating example:", error);
-    throw new Error("Failed to update example");
-  }
-};
+def update_example(db: Session, example_id: int, example: schemas.ExampleSchema):
+    db_example = db.query(models.Example).filter(models.Example.id == example_id).first()
+    if db_example:
+        db_example.name = example.name
+        db_example.age = example.age
+        db_example.email = example.email
+        db.commit() 
+        db.refresh(db_example)
+    return db_example
 
-export const deleteExample = async (id: string) => {
-  try {
-    await db.delete(exampleTable).where(eq(exampleTable.id, id));
-  } catch (error) {
-    console.error("Error deleting example:", error);
-    throw new Error("Failed to delete example");
-  }
-};
+def delete_example(db: Session, example_id: int):
+    db_example = db.query(models.Example).filter(models.Example.id == example_id).first()
+    if db_example:
+        db.delete(db_example)
+        db.commit()
+    return db_example
 ```
 
-- In `package.json`, add the following scripts:
+- Create a `requirements.txt` file in the `/api` folder
+- In `api/requirements.txt`, add the following packages:
 
-```json
-"scripts": {
-  "db:generate": "npx drizzle-kit generate",
-  "db:migrate": "npx drizzle-kit migrate"
-}
+```txt
+fastapi
+sqlalchemy
+pydantic
+uvicorn
 ```
-
-- Run the following command to generate the tables:
-
-```bash
-npm run db:generate
-```
-
-- Run the following command to migrate the tables:
-
-```bash
-npm run db:migrate
-```
-
-- Create a folder called `/actions` in the root of the project for server actions
-
-- Create folder called `/types` in the root of the project for shared types
-
-- Create a file called `action-types.ts` in the `/types/actions` folder for server action types with the following code:
-
-- Create file called `/types/index.ts` and export all the types from the `/types` folder like so:
-
-```ts
-export * from "./action-types";
-```
-
-- Create a file called `example-actions.ts` in the `/actions` folder for the example table's actions:
-
-```ts
-"use server";
-
-import { createExample, deleteExample, getAllExamples, getExampleById, updateExample } from "@/db/queries/example-queries";
-import { InsertExample } from "@/db/schema/example-schema";
-import { ActionState } from "@/types";
-import { revalidatePath } from "next/cache";
-
-export async function createExampleAction(data: InsertExample): Promise<ActionState> {
-  try {
-    const newExample = await createExample(data);
-    revalidatePath("/examples");
-    return { status: "success", message: "Example created successfully", data: newExample };
-  } catch (error) {
-    return { status: "error", message: "Failed to create example" };
-  }
-}
-
-export async function getExampleByIdAction(id: string): Promise<ActionState> {
-  try {
-    const example = await getExampleById(id);
-    return { status: "success", message: "Example retrieved successfully", data: example };
-  } catch (error) {
-    return { status: "error", message: "Failed to get example" };
-  }
-}
-
-export async function getAllExamplesAction(): Promise<ActionState> {
-  try {
-    const examples = await getAllExamples();
-    return { status: "success", message: "Examples retrieved successfully", data: examples };
-  } catch (error) {
-    return { status: "error", message: "Failed to get examples" };
-  }
-}
-
-export async function updateExampleAction(id: string, data: Partial<InsertExample>): Promise<ActionState> {
-  try {
-    const updatedExample = await updateExample(id, data);
-    revalidatePath("/examples");
-    return { status: "success", message: "Example updated successfully", data: updatedExample };
-  } catch (error) {
-    return { status: "error", message: "Failed to update example" };
-  }
-}
-
-export async function deleteExampleAction(id: string): Promise<ActionState> {
-  try {
-    await deleteExample(id);
-    revalidatePath("/examples");
-    return { status: "success", message: "Example deleted successfully" };
-  } catch (error) {
-    return { status: "error", message: "Failed to delete example" };
-  }
-}
-```
-
-```ts
-export type ActionState = {
-  status: "success" | "error";
-  message: string;
-  data?: any;
-};
-```
-
-- Implement the server actions in the `/app/page.tsx` file to allow for manual testing.
 
 - The backend is now setup.
